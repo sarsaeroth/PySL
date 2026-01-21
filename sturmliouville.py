@@ -30,6 +30,9 @@ class SturmLiouville:
         self._basis_kwargs = {}
         self._custom_basis = None
 
+        # Interpolation method setting
+        self._interpolation_method = 'cubic'
+
         # Computed basis functions on grid
         self._basis_functions = None
         self._basis_derivatives = None
@@ -117,6 +120,14 @@ class SturmLiouville:
         self._custom_basis = list(functions)
         return self
 
+    def set_interpolation_method(self, method):
+        valid_methods = ['cubic', 'forward', 'backward', 'midpoint']
+        if method not in valid_methods:
+            raise ValueError(f"interpolation method must be one of {valid_methods}, got '{method}'")
+
+        self._interpolation_method = method
+        return self
+
     def _determine_common_domain(self):
         p_x = np.array(sorted(self._p_data.keys()))
         q_x = np.array(sorted(self._q_data.keys()))
@@ -145,11 +156,33 @@ class SturmLiouville:
         x_data = np.array(sorted(data.keys()))
         y_data = np.array([data[x] for x in sorted(data.keys())])
 
-        # Create cubic spline interpolator
-        cs = CubicSpline(x_data, y_data, extrapolate=False)
+        if self._interpolation_method == 'cubic':
+            cs = CubicSpline(x_data, y_data, extrapolate=False)
+            return cs(x_grid)
 
-        # Evaluate on grid
-        return cs(x_grid)
+        elif self._interpolation_method == 'forward':
+            result = np.empty_like(x_grid)
+            for i, x in enumerate(x_grid):
+                idx = np.searchsorted(x_data, x, side='right') - 1
+                idx = max(0, idx)
+                result[i] = y_data[idx]
+            return result
+
+        elif self._interpolation_method == 'backward':
+            result = np.empty_like(x_grid)
+            for i, x in enumerate(x_grid):
+                idx = np.searchsorted(x_data, x, side='left')
+                idx = min(idx, len(y_data) - 1)
+                result[i] = y_data[idx]
+            return result
+
+        elif self._interpolation_method == 'midpoint':
+            result = np.empty_like(x_grid)
+            for i, x in enumerate(x_grid):
+                fwd_idx = max(0, np.searchsorted(x_data, x, side='right') - 1)
+                bwd_idx = min(np.searchsorted(x_data, x, side='left'), len(y_data) - 1)
+                result[i] = (y_data[fwd_idx] + y_data[bwd_idx]) / 2.0
+            return result
 
     def preprocess(self, n_points=None):
         # Check that all data is provided
